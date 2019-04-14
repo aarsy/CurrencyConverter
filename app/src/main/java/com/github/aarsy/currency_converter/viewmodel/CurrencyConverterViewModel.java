@@ -22,44 +22,52 @@ import androidx.lifecycle.Transformations;
 
 public class CurrencyConverterViewModel extends AndroidViewModel {
 
-
-    private final LiveData<CurrencyList> currencyListObservable;
-    private final LiveData<List<CurrencyItem>> currencyItemListObservable;
-    private final LiveData<CurrencyExchangeRatesList> currencyExchangeRatesListObservable;
-    private final LiveData<CurrencyExchangeModel> currencyRateItemListObservable;
+    private LiveData<List<CurrencyItem>> currencyItemListObservable;
+    private LiveData<CurrencyExchangeModel> currencyRateItemListObservable;
+    private final LocalCacheHandler databaseWrapper;
 
 
     public CurrencyConverterViewModel(@NonNull Application application) {
         super(application);
-        LocalCacheHandler databaseWrapper=new LocalCacheHandler(application.getApplicationContext());
-        currencyListObservable = CurrencyRepository.getInstance(databaseWrapper).getAvailableCurrencyList();
+        databaseWrapper = new LocalCacheHandler(application.getApplicationContext());
+        fetchCurrencyList();
+        //Wait a few millis to fetch Exchange Rates
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        fetchExchangeRatesList();
+
+    }
+
+
+    private void fetchCurrencyList() {
+        LiveData<CurrencyList> currencyListObservable = CurrencyRepository.getInstance(databaseWrapper).getAvailableCurrencyList();
         currencyItemListObservable = Transformations.map(currencyListObservable, new Function<CurrencyList, List<CurrencyItem>>() {
             @Override
             public List<CurrencyItem> apply(CurrencyList input) {
                 List<CurrencyItem> currencyItems = null;
-                if (input != null && input.getCurrencies() != null) {
-                    currencyItems = new ArrayList<>();
-                    for (Map.Entry<String, String> entry : input.getCurrencies().entrySet()) {
-                        currencyItems.add(new CurrencyItem(entry.getKey(), entry.getValue()));
-                    }
+                if (input == null || input.getCurrencies() == null) {
+                    return currencyItems;
                 }
+                currencyItems = new ArrayList<>();
+                for (Map.Entry<String, String> entry : input.getCurrencies().entrySet()) {
+                    currencyItems.add(new CurrencyItem(entry.getKey(), entry.getValue()));
+                }
+
                 return currencyItems;
             }
         });
+    }
 
-
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        currencyExchangeRatesListObservable = CurrencyRepository.getInstance(databaseWrapper).getLiveExchangeRates();
+    private void fetchExchangeRatesList() {
+        LiveData<CurrencyExchangeRatesList> currencyExchangeRatesListObservable = CurrencyRepository.getInstance(databaseWrapper).getLiveExchangeRates();
         currencyRateItemListObservable = Transformations.map(currencyExchangeRatesListObservable, new Function<CurrencyExchangeRatesList, CurrencyExchangeModel>() {
 
             @Override
             public CurrencyExchangeModel apply(CurrencyExchangeRatesList input) {
                 CurrencyExchangeModel currencyRateModel = null;
-
                 if (input == null || input.getCurrencies() == null || input.getCurrencies().size() == 0) {
                     return currencyRateModel;
                 }
@@ -74,7 +82,6 @@ public class CurrencyConverterViewModel extends AndroidViewModel {
                 return currencyRateModel;
             }
         });
-
     }
 
 
